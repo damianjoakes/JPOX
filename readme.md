@@ -10,39 +10,18 @@
 
 ```javascript
 const { JPOX } = require("JPOX")
-const db = new JPOX("/db/db.json", options)
+const db = new JPOX(options)
 ```
 
 ***
 
 # JPOX Instance
 
-` var db = new JPOX(json, options)`
+` var db = new JPOX(options)`
 
-The *json* argument passed in must be one of two types. It can either be the path to a JSON file, or it can be raw (stringified) JSON.
+The *options* argument is an object that contains different options for creating the JPOX Database. See the **Options** section below for a detail breakdown of these options.
 
-The *options* argument must be an object.
-
-JPOX works by creating an array (`JPOX.database`) stores internally. This array can be accessed and written to independently of the JSON file that `JPOX.options.path` points to. The file can be written to automatically, or manually by using `JPOX.apply()`.
-
-***
-
-#### *json*
-
-##### File
-
-If *json* is equal to a file path, JPOX will determine whether the file path is valid, add if the file exists. If the file path is valid but does not exist, then JPOX will create a new file at the path specified. If the file exists, but is empty or does not contain valid JSON, then the file will be cleared and initialized as an empty array.
-
-##### Raw JSON
-
-If *json* is raw JSON, then JPOX will create a new JPOX instance with the parsed JSON data. Note that *JPOX.options.path* will **not** be filled upon creation of the JPOX instance. It will have to be set manually using:
-
-`JPOX.options.path = "path/to/file.json"`
-
-*or*
-
-`var db = new JPOX('[{"useless data": "useless"}]', { path: "path/to/file.json" })`
-
+JPOX works by creating an array (referenced via `JPOX.database`) that's stored internally. The file at `JPOX.options.path` is not written to until the `JPOX.apply()` method is executed. This choice was made to avoid loss of data on server reloads *(such as when writing a file with multiple sets of data using* `nodemon`*.)*
 
 ***
 
@@ -52,8 +31,12 @@ If *json* is raw JSON, then JPOX will create a new JPOX instance with the parsed
 
 Below are some valid values for for the *options* object:
 
-* `JPOX.options.path`, a string containing a valid path for the location of the JSON file that the JPOX instance will write to. 
-*default: json (if defined) ***or*** null*  
+* `JPOX.options.path`, a string containing a valid path for the location of the JSON file that the JPOX instance will write to/load from.
+*default: json data (if defined) ***or*** null*  
+<br>
+
+* `JPOX.options.rawJSON`, stringified JSON data. JPOX will prioritize loading database info from this data, if able. 
+*default: json data (if defined) ***or*** null*
 <br>
 
 * `JPOX.options.alwaysUpdateFirst`, a boolean, used specifically for `JPOX.add(callback, options)`. If set to *true*, then JPOX will always try to update the data in the database before trying to add it. 
@@ -80,11 +63,22 @@ Passing this function into `manipulate`, along with `alwaysUpdateFirst` would au
 *default: "prettify"*  
 <br>
 
-The following options can be passed manually into the JPOX database methods, taking precedent over the option specified upon creation of the JPOX instance:
+The following options can be passed manually into the JPOX database methods, taking precedence over the option specified upon creation of the JPOX instance:
 * `autoapply`
 * `alwaysUpdateFirst`
 * `manipulate`  
 
+***
+
+# JPOX Data Priority
+
+When creating the JPOX database, JPOX will prioritize certain data:
+`options.rawJSON` → `options.path` → `null`
+The database will **first** be created from `options.rawJSON`, then `options.path`, before finally calling null and creating an empty database. 
+
+When `options.rawJSON` and `options.path` are used together, the database will be created based off of `options.rawJSON`, then the database will **overwrite** the file located at `options.path`. 
+
+The choice to overwrite the target data rather than save it was made, as the purpose of JPOX is to have *easy* total data control, if the contents of the target database need to be saved and written to from a separate set of source data, it's better to load the database off of the target data, and add the source data through JPOX.
 
 ***
 
@@ -175,7 +169,7 @@ Updates the database with new informations, specified in `callback`, and `manipu
     })
 ```
 
-When assigned to a variable, returns an object containing the new data, and the index of the updated object.
+The `JPOX.update()` method returns an object containing the new data, and the index of the updated object.
 
 <br>
 
@@ -246,19 +240,19 @@ Deletes an object from the database. `callback` is always a function that must r
 
 #### `JPOX.apply()`
 
-Saves the internally stored database to the JSON file located at `JPOX.options.path`. If `autoapply` was set to false when the JPOX instance was created, then to save anything to the JSON file, this method needs to be called.
+Saves the internally stored database to the JSON file located at `JPOX.options.path`. If `autoapply` was set to false when the JPOX instance was created, then to save anything to the JSON file, this method needs to be called. (Double check this if your database isn't saving).
 
 <br>
 
 #### `JPOX.reload()`
 
-Refreshes the JPOX cache, granting the ability to dodge any server downtime from a reload. This becomes useful in situations such as when using `forever` or `node` to run a server, instead of calling `process.exit(1)`, calling `JPOX.reload()` will refresh JPOX's cache, allowing JPOX to keep the most up to date information. Would usually be called alongside `JPOX.apply()`, since both `forever` and `node` won't automatically refresh the cache after `JPOX.apply()` is called. This isn't a prominently used feature, just a nice-to-have.
+Refreshes the JPOX cache, granting the ability to dodge any server downtime from a reload. This becomes useful in situations such as when using `forever` or `node` to run a server, instead of calling `process.exit(1)`, calling `JPOX.reload()` will refresh JPOX's cache, allowing JPOX to keep the most up to date information. Would usually be called alongside `JPOX.apply()`, since both `forever` and `node` won't automatically refresh the cache after `JPOX.apply()` is called. 
 
 <br>
 
 #### `Array.prototype.methods()`
 
-The JPOX database is stored internall as an array. This means that all Array methods can be called onto `JPOX.database`. For example, here's a codeblock that sorts the database based on the `val` property, then applies the changes to the JSON file:
+The JPOX database is stored internally as an array. This means that all Array methods can be called onto `JPOX.database`. For example, here's a codeblock that sorts the database based on the `val` property, then applies the changes to the JSON file:
 
 ```javascript
     console.log(JPOX.database)
@@ -289,12 +283,13 @@ The JPOX database is stored internall as an array. This means that all Array met
 JPOX can be used to easily manage multiple, intertwined databases. Since all  arguments to methods (excluding the `JPOX.add()` method) take in a function, we can update two different databases concomitantly. Below is an example of a (simple) book sale system:
 
 ```javascript
-    const options = {
-        autoapply: false
-    }
-    const db1 = new JPOX("./db/db1.json", options)
-    const db2 = new JPOX("./db/db2.json", options)
-    console.log(db1.database)
+    const books = new JPOX({
+        path: "./db/db1.json"
+    })
+    const sales = new JPOX({
+        path: "./db/db2.json"
+    })
+    console.log(books.database)
     /* 
         returns Array [
             { book_title: "The Catcher in the Rye", stock: 10 },
@@ -302,10 +297,10 @@ JPOX can be used to easily manage multiple, intertwined databases. Since all  ar
         ]
     */
 
-   console.log(db2.database)
+   console.log(sales.database)
    /*
         returns Array [
-            { type_of_sale: "purchase", title: "To Kill a Mockingbird" }
+            { type_of_sale: "purchase", title: "To Kill a Mockingbird", qty:2 }
         ]
    */
 
@@ -314,46 +309,32 @@ JPOX can be used to easily manage multiple, intertwined databases. Since all  ar
         type_of_sale: "return",
         qty: 1
     }
-             // ↓ these don't need arguments, as we aren't trying to 
-             //   update anything in db2. instead we'll be utilizing the "null"
-             //   passed here to call the fallback function at the end
-    db2.update(null, () => {
-        // procedure if type_of_sale is a purchase. here we will check 
-        // if it is in stock, and if not, we will add it into the database
-        if(sale.type_of_sale === "purchase") {
-            db1.update(y => y.title === sale.title, invData => {
-                // removes stock from inventory after purchase of a book that was found in the database
-                invData.stock -= sale.qty
-                return invData
-            }, null, () => {
-                // ↓ fallback in case the book does not exist in stock, we will add it now, and remove the purchase quantity from stock
-                db1.add({
-                    book_title: sale.title,
-                    stock: 0 - sale.qty
-                })
-            })
-        // checks if type_of_sale is a return. if it is, we will check if it is
-        // in stock, and if not, we will add it into the database 
+    
+    sales.add({...sale})
+    sales.apply()
+    sales.reload()
+    books.update(book => {
+        return book.book_title === sale.title
+    }, data => {
+        if(sale.type_of_sale === "sale") {
+            data.stock -= sale.qty
         } else if (sale.type_of_sale === "return") {
-            db1.update(y => y.title === sale.title, invData => {
-                // adds stock back into inventory from the return being performed on a book that was found in the database
-                invData.stock += sale.qty
-                return invData
-            }, null, () => {
-                db1.add({
-                    // ↓ fallback in case the book does not exist in stock, we will add it now, and add the return quantity into stock
-                    book_title: sale.title,
-                    stock: 0 + sale.qty
-                })
+            data.stock += sale.qty
+        }
+        return data
+    }, null, () => {
+        // BOOK NOT FOUND IN STOCK
+        if(sale.type_of_sale === "sale") {
+            books.add({
+                book_title: sale.title,
+                stock = -(qty) 
+            })
+        } else if (sale.type_of_sale === "return") {
+            books.add({
+                book_title: sale.title,
+                stock = qty 
             })
         }
-           // | here we are making use of the "null" passed into the previous functions
-           // ↓ to add a sale into db2
-    }, null, () => {
-        db2.add({
-            type_of_sale: sale.type_of_sale,
-            title: sale.title
-        })
     })
 ```
 
