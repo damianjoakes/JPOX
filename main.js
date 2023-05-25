@@ -14,11 +14,12 @@ Database.update(x => x.sku == req.body.sku, data => {
 
 // Takes in path to JSON file. Parses the JSON data. 
 class JPOX {
-    constructor(json, options) {
+    constructor(options) {
         // saves options from options object, sets default options if they do not exist
         if (options) {
             this.options = {
-                path: options.path ? json : null,
+                path: options.path ?? null,
+                rawJSON: options.rawJSON ?? null,
                 alwaysUpdateFirst: options.alwaysUpdateFirst ?? false,
                 autoapply: options.autoapply ?? false,
                 jsonFormatter: options.jsonFormatter ?? "prettify",
@@ -27,6 +28,7 @@ class JPOX {
         } else {
             this.options = {
                 path: null,
+                rawJSON: null,
                 alwaysUpdateFirst: false,
                 autoapply: false,
                 jsonFormatter: "prettify",
@@ -38,41 +40,59 @@ class JPOX {
         // in. if the parse was successful, then the database is created from the JSON data. if it is unsuccessful,
         // then we check to see if json is a path. if both of these are unsuccessful, then the database is initialized
         // with a blank array
-        if (json) {
+        if (this.options.path && !this.options.rawJSON) {
+            this.options.path = path.normalize(this.options.path).replace(/\\/g, '/')
+            if (fs.existsSync(this.options.path)) {
+                const contents = fs.readFileSync(this.options.path, "utf-8");
+
+                // Check if the file is empty
+                if (contents.trim() === "") {
+                    fs.writeFileSync(this.options.path, "[]")
+                    console.log("JSON file was empty. File has been initialized as an empty array.")
+                }
+            } else {
+                fs.writeFileSync(this.options.path, "[]")
+                console.log("No JSON file existed. File has been initialized as an empty array.")
+            }
+
             try {
-                var isJSON = JSON.parse(json)
-                if (isJSON && typeof isJSON === "object") {
-                    this.database = JSON.parse(json)
+                this.database = JSON.parse(fs.readFileSync(this.options.path))
+            } catch (err) {
+                console.log(err)
+            }
+
+        } else if (this.options.rawJSON) {
+            if (!fs.existsSync(this.options.path)) {
+                if (!options.hasOwnProperty("path")) {
+                    console.log(`WARNING: No path was specified upon JPOX creation. Data will NOT be stored until "path" is specified. This can be done by using "JPOX.options.path = "path/to/file.json", or reinitializing the JPOX database. If this is intended, set {path: false} to remove this message.`)
+                } else if (typeof options.path !== "string" && options.path !== false) {
+                    console.log(`WARNING: The path specified was invalid. Data will NOT be stored until "path" is specified. This can be done by using "JPOX.options.path = "path/to/file.json", or reinitializing the JPOX database.`)
                 } else {
-                    this.options.path = path.normalize(path.join(__dirname, "/..", json)).replace(/\\/g, '/')
-                    if (fs.existsSync(this.options.path)) {
-                        const contents = fs.readFileSync(this.options.path, "utf-8");
-    
-                        // Check if the file is empty
-                        if (contents.trim() === "") {
+                    if(path.isAbsolute(this.options.path)) {
+                        try {
                             fs.writeFileSync(this.options.path, "[]")
                             console.log("JSON file was empty. File has been initialized as an empty array.")
+                        } catch (err) {
+                            console.log("ERROR: Failed to initialize JPOX database. The path name may not lead to an existing directory. Cannot continue.")
+                            throw new Error(err)
                         }
                     } else {
-                        fs.writeFileSync(this.options.path, "[]")
-                        console.log("No JSON file existed. File has been initialized as an empty array.")
+                        console.log(`WARNING: The path specified was not a valid path structure. Data will NOT be stored until "path" is specified. This can be done by using "JPOX.options.path = path.join(__dirname, "./path/to/file.json"), or reinitializing the JPOX database with a valid path.`)
                     }
-    
-    
-                    try {
-                        this.database = JSON.parse(fs.readFileSync(this.options.path))
-                    } catch (err) {
-                        console.log(err)
-                    }
-    
-                    this.database = JSON.parse(fs.readFileSync(path.join(__dirname, "\\..", json)))
-                    this.options.path = path.normalize(path.join(__dirname, "/..", json)).replace(/\\/g, '/')
                 }
-            } catch (err) {
-                throw new Error(`Error "${err}" encountered when initiating JPOX database.`)
+            } else {
+                this.options.path = path.normalize(this.options.path).replace(/\\/g, '/')
+                const contents = fs.readFileSync(this.options.path, "utf-8");
+                if (contents.trim() === "") {
+                    fs.writeFileSync(this.options.path, "[]")
+                    console.log(`WARNING: File at JPOX "path" was empty. File has been initialized as an empty array at ${this.options.path}.`)
+                }
             }
-        } else {
-            this.database = []
+            try {
+                this.database = JSON.parse(this.options.rawJSON)
+            } catch (err) {
+                throw new Error(err)
+            }
         }
     }
 
@@ -84,16 +104,17 @@ class JPOX {
         }
         var data = this.#findObjectByKeyValue(callback).result
         var index = this.#findObjectByKeyValue(callback).index
+        
         if (data == null) {
             if (fallback !== null) {
-                var f = fallback
-                return f
+                
+                fallback()
             }
         } else {
             data = manipulate(data)
             this.database[index] = data
             if (autoapply == true) {
-                this.apply({path: path})
+                this.apply({ path: path })
             }
             return {
                 result: data,
@@ -119,7 +140,7 @@ class JPOX {
         this.database.splice(index, 1)
         index = this.#findObjectByKeyValue(callback).index
         if (autoapply) {
-            this.apply({path: path})
+            this.apply({ path: path })
         }
         return {
             result: data,
@@ -130,26 +151,26 @@ class JPOX {
     // adds an item to the database
     add(callback, options = {}) {
         const { autoapply, path, manipulate, alwaysUpdateFirst, prop } = Object.assign({}, options, this.options)
-        if(alwaysUpdateFirst == true) {
-            if(!manipulate) {
+        if (alwaysUpdateFirst == true) {
+            if (!manipulate) {
                 throw new Error(`A manipulate function MUST be passed into "JPOX.add(callback, options)" if "options.alwaysUpdateFirst" is set to true.`)
             }
-            if(!prop) {
-                this.update(x => x == callback, manipulate(), null, this.add(callback, {autoapply: autoapply, path: path, alwaysUpdateFirst: false}))
+            if (!prop) {
+                this.update(x => x == callback, manipulate(), null, this.add(callback, { autoapply: autoapply, path: path, alwaysUpdateFirst: false }))
             } else if (prop) {
-                this.update(function(x) {
-                    for(let i = 0 ; i < Object.values(x); i++) {
+                this.update(function (x) {
+                    for (let i = 0; i < Object.values(x); i++) {
                         if (Object.values[i] == prop) {
                             return true
                         }
                     }
-                }, manipulate(), null, this.add(callback, {autoapply: autoapply, path: path, alwaysUpdateFirst: false}))
+                }, manipulate(), null, this.add(callback, { autoapply: autoapply, path: path, alwaysUpdateFirst: false }))
             }
 
-        } 
+        }
         this.database.push(callback)
         if (autoapply) {
-            this.apply({path: path})
+            this.apply({ path: path })
         }
         return callback
     }
@@ -157,7 +178,7 @@ class JPOX {
     // private method, locates an object by using a callback function. if callback is null, then
     // an object with null and index -1 is returned
     #findObjectByKeyValue(callback) {
-        if(callback !== null) {
+        if (callback !== null) {
             for (let i = 0; i < this.database.length; i++) {
                 if (callback(this.database[i])) {
                     return {
@@ -176,8 +197,9 @@ class JPOX {
     // saves all changes made to JPOX instance to the JSON file
     apply(options) {
         const { path } = Object.assign({}, options, this.options)
-        if (path == null) {
-            console.log("JPOX path is null. No path to a JSON file was specified upon save. Please update your JPOX database using 'JPOX.options.path = \"Path\\to\\your\\File.json\".")
+        if (path === null || path === false) {
+            console.log(`JPOX path is null. No path to a JSON file was specified upon save. Please update your JPOX database using 'JPOX.options.path = path.join(__dirname, "./path/to/your/file.json").`)
+            return
         }
         if (this.options.jsonFormatter == "prettify") {
             fs.writeFile(path, JSON.stringify(this.database, null, 2), err => {
