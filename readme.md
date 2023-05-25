@@ -1,6 +1,7 @@
 
 # Just Another Piece of Cake Storage (JPOX)
-###### Reliable, easy-to-use, powerful JSON based storage
+#### Reliable, easy-to-use, powerful JSON based storage
+###### Current version: v1.0.1
 
 ###### This markdown may seem long, but it's a case of extensive documentation, not over-complexity.
 ***
