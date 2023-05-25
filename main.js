@@ -99,6 +99,9 @@ class JPOX {
     // updates an element in the database
     update(callback, manipulate, options = {}, fallback = null) {
         const { autoapply, path } = Object.assign({}, options, this.options)
+        if(!manipulate) {
+            const manipulate = Object.assign({}, options, this.options)
+        }
         if (typeof manipulate !== "function") {
             throw new Error("Database.update() is missing a valid function for the argument (manipulate).")
         }
