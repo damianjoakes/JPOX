@@ -68,7 +68,7 @@ class JPOX {
                 } else if (typeof options.path !== "string" && options.path !== false) {
                     console.log(`WARNING: The path specified was invalid. Data will NOT be stored until "path" is specified. This can be done by using "JPOX.options.path = "path/to/file.json", or reinitializing the JPOX database.`)
                 } else {
-                    if(path.isAbsolute(this.options.path)) {
+                    if (path.isAbsolute(this.options.path)) {
                         try {
                             fs.writeFileSync(this.options.path, "[]")
                             console.log("JSON file was empty. File has been initialized as an empty array.")
@@ -99,7 +99,7 @@ class JPOX {
     // updates an element in the database
     update(callback, manipulate, options = {}, fallback = null) {
         const { autoapply, path } = Object.assign({}, options, this.options)
-        if(!manipulate) {
+        if (!manipulate) {
             const manipulate = Object.assign({}, options, this.options)
         }
         if (typeof manipulate !== "function") {
@@ -107,22 +107,31 @@ class JPOX {
         }
         var data = this.#findObjectByKeyValue(callback).result
         var index = this.#findObjectByKeyValue(callback).index
-        
+
         if (data == null) {
             if (fallback !== null) {
-                
                 fallback()
+            } else {
+                return {
+                    result: "None",
+                    dbIndex: -1
+                }
             }
         } else {
-            data = manipulate(data)
-            this.database[index] = data
-            if (autoapply == true) {
-                this.apply({ path: path })
+            try {
+                data = manipulate(data)
+                this.database[index] = data
+                if (autoapply == true) {
+                    this.apply({ path: path })
+                }
+                return {
+                    result: data,
+                    dbIndex: index
+                }
+            } catch (err) {
+                throw new Error(err)
             }
-            return {
-                result: data,
-                dbIndex: index
-            }
+            
         }
     }
 
@@ -140,15 +149,21 @@ class JPOX {
         var data = this.#findObjectByKeyValue(callback).result
         var index = this.#findObjectByKeyValue(callback).index
 
-        this.database.splice(index, 1)
-        index = this.#findObjectByKeyValue(callback).index
-        if (autoapply) {
-            this.apply({ path: path })
+        try {
+            this.database.splice(index, 1)
+            index = this.#findObjectByKeyValue(callback).index
+            if (autoapply) {
+                this.apply({ path: path })
+            }
+            return {
+                result: data,
+                dbIndex: `Index checked again. Object at index ${index}.`
+            }
+        } catch (err) {
+            throw new Error(err)
         }
-        return {
-            result: data,
-            dbIndex: `Index checked again. Object at index ${index}.`
-        }
+        
+        
     }
 
     // adds an item to the database
@@ -169,7 +184,6 @@ class JPOX {
                     }
                 }, manipulate(), null, this.add(callback, { autoapply: autoapply, path: path, alwaysUpdateFirst: false }))
             }
-
         }
         this.database.push(callback)
         if (autoapply) {
