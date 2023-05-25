@@ -1,0 +1,22 @@
+{
+  "name": "jpox",
+  "version": "1.0.0",
+  "description": "JSON Piece of Cake Storage",
+  "main": "main.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damianjoakes/JPOX.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/damianjoakes/JPOX/issues"
+  },
+  "homepage": "https://github.com/damianjoakes/JPOX#readme"
+}
